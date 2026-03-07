@@ -2,11 +2,48 @@
 #include  <Library/UefiLib.h>
 #include  <Library/UefiBootServicesTableLib.h>
 #include  <Library/PrintLib.h>
+#include  <Library/BaseMemoryLib.h>
 #include  <Protocol/LoadedImage.h>
 //#include  <Protocol/SimpleFileSystem.h>
 //#include  <Protocol/DiskIo2.h>
 //#include  <Protocol/BlockIo.h>
 #include  <Guid/FileInfo.h>
+
+typedef UINT64 Elf64_Addr;
+typedef UINT64 Elf64_Off;
+typedef UINT16 Elf64_Half;
+typedef UINT32 Elf64_Word;
+typedef UINT64 Elf64_Xword;
+
+#define PT_LOAD 1
+
+typedef struct {
+  unsigned char e_ident[16];
+  Elf64_Half    e_type;
+  Elf64_Half    e_machine;
+  Elf64_Word    e_version;
+  Elf64_Addr    e_entry;
+  Elf64_Off     e_phoff;
+  Elf64_Off     e_shoff;
+  Elf64_Word    e_flags;
+  Elf64_Half    e_ehsize;
+  Elf64_Half    e_phentsize;
+  Elf64_Half    e_phnum;
+  Elf64_Half    e_shentsize;
+  Elf64_Half    e_shnum;
+  Elf64_Half    e_shstrndx;
+} Elf64_Ehdr;
+
+typedef struct {
+  Elf64_Word  p_type;
+  Elf64_Word  p_flags;
+  Elf64_Off   p_offset;
+  Elf64_Addr  p_vaddr;
+  Elf64_Addr  p_paddr;
+  Elf64_Xword p_filesz;
+  Elf64_Xword p_memsz;
+  Elf64_Xword p_align;
+} Elf64_Phdr;
 
 struct MemoryMap {
   UINTN buffer_size;
@@ -143,12 +180,33 @@ EFI_STATUS EFIAPI UefiMain(
   EFI_FILE_INFO* file_info = (EFI_FILE_INFO*)file_info_buffer;
   UINTN kernel_file_size = file_info->FileSize;
 
+  // ELFファイルを一時領域(0x100000)にまるごとロード
   EFI_PHYSICAL_ADDRESS kernel_base_addr = 0x100000;
   gBS->AllocatePages(
     AllocateAddress, EfiLoaderData,
     (kernel_file_size + 0xfff) / 0x1000, &kernel_base_addr);
   kernel_file->Read(kernel_file, &kernel_file_size, (VOID*)kernel_base_addr);
   Print(L"Kernel: 0x%0lx (%lu bytes)\n", kernel_base_addr, kernel_file_size);
+
+  // ELFプログラムヘッダを解析してPT_LOADセグメントをVMAに配置
+  Elf64_Ehdr *ehdr = (Elf64_Ehdr*)kernel_base_addr;
+  UINT64 kernel_first_addr = MAX_UINT64, kernel_last_addr = 0;
+  for (UINTN i = 0; i < ehdr->e_phnum; i++) {
+    Elf64_Phdr *phdr = (Elf64_Phdr*)(kernel_base_addr + ehdr->e_phoff + ehdr->e_phentsize * i);
+    if (phdr->p_type != PT_LOAD) continue;
+    if (phdr->p_vaddr < kernel_first_addr) kernel_first_addr = phdr->p_vaddr;
+    if (phdr->p_vaddr + phdr->p_memsz > kernel_last_addr) kernel_last_addr = phdr->p_vaddr + phdr->p_memsz;
+  }
+  EFI_PHYSICAL_ADDRESS kernel_load_addr = kernel_first_addr;
+  gBS->AllocatePages(
+    AllocateAddress, EfiLoaderData,
+    (kernel_last_addr - kernel_first_addr + 0xfff) / 0x1000, &kernel_load_addr);
+  for (UINTN i = 0; i < ehdr->e_phnum; i++) {
+    Elf64_Phdr *phdr = (Elf64_Phdr*)(kernel_base_addr + ehdr->e_phoff + ehdr->e_phentsize * i);
+    if (phdr->p_type != PT_LOAD) continue;
+    CopyMem((VOID*)phdr->p_vaddr, (VOID*)(kernel_base_addr + phdr->p_offset), phdr->p_filesz);
+    SetMem((VOID*)(phdr->p_vaddr + phdr->p_filesz), phdr->p_memsz - phdr->p_filesz, 0);
+  }
   
   EFI_STATUS status;
   status = gBS->ExitBootServices(image_handle, memmap.map_key);
@@ -165,7 +223,7 @@ EFI_STATUS EFIAPI UefiMain(
     }
   }
 
-  UINT64 entry_addr = *(UINT64*)(kernel_base_addr + 24);
+  UINT64 entry_addr = ehdr->e_entry;
   
   typedef void EntryPointType(void);
   EntryPointType* entry_point = (EntryPointType*)entry_addr;
