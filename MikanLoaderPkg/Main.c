@@ -149,6 +149,8 @@ EFI_STATUS OpenRootDir(EFI_HANDLE image_handle, EFI_FILE_PROTOCOL** root) {
 EFI_STATUS EFIAPI UefiMain(
     EFI_HANDLE image_handle,
     EFI_SYSTEM_TABLE *system_table) {
+  EFI_STATUS status;
+
   Print(L"Hello, Mikan World!\n");
   
   CHAR8 memmap_buf[4096 * 4];
@@ -167,15 +169,17 @@ EFI_STATUS EFIAPI UefiMain(
   memmap_file->Close(memmap_file);
 
   EFI_FILE_PROTOCOL *kernel_file;
-  root_dir->Open(
+  status = root_dir->Open(
       root_dir, &kernel_file, L"\\kernel.elf",
       EFI_FILE_MODE_READ, 0);
+  Print(L"open kernel: %r\n", status);
 
   UINTN file_info_size = sizeof(EFI_FILE_INFO) + sizeof(CHAR16) * 12;
   UINT8 file_info_buffer[file_info_size];
-  kernel_file->GetInfo(
+  status = kernel_file->GetInfo(
       kernel_file, &gEfiFileInfoGuid,
       &file_info_size, file_info_buffer);
+  Print(L"open kernel info: %r\n", status);
 
   EFI_FILE_INFO* file_info = (EFI_FILE_INFO*)file_info_buffer;
   UINTN kernel_file_size = file_info->FileSize;
@@ -185,8 +189,8 @@ EFI_STATUS EFIAPI UefiMain(
   gBS->AllocatePages(
     AllocateAddress, EfiLoaderData,
     (kernel_file_size + 0xfff) / 0x1000, &kernel_base_addr);
-  kernel_file->Read(kernel_file, &kernel_file_size, (VOID*)kernel_base_addr);
-  Print(L"Kernel: 0x%0lx (%lu bytes)\n", kernel_base_addr, kernel_file_size);
+  status = kernel_file->Read(kernel_file, &kernel_file_size, (VOID*)kernel_base_addr);
+  Print(L"Kernel: 0x%0lx (%lu bytes): %r\n", kernel_base_addr, kernel_file_size, status);
 
   // ELFプログラムヘッダを解析してPT_LOADセグメントをVMAに配置
   Elf64_Ehdr *ehdr = (Elf64_Ehdr*)kernel_base_addr;
@@ -208,7 +212,6 @@ EFI_STATUS EFIAPI UefiMain(
     SetMem((VOID*)(phdr->p_vaddr + phdr->p_filesz), phdr->p_memsz - phdr->p_filesz, 0);
   }
   
-  EFI_STATUS status;
   status = gBS->ExitBootServices(image_handle, memmap.map_key);
   if (EFI_ERROR(status)) {
     status = GetMemoryMap(&memmap);
