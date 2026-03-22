@@ -11,42 +11,9 @@
 #include  <Guid/FileInfo.h>
 
 #include "../kernel/frame_buffer_config.hpp"
-
-typedef UINT64 Elf64_Addr;
-typedef UINT64 Elf64_Off;
-typedef UINT16 Elf64_Half;
-typedef UINT32 Elf64_Word;
-typedef UINT64 Elf64_Xword;
+#include "../kernel/elf.hpp"
 
 #define PT_LOAD 1
-
-typedef struct {
-  unsigned char e_ident[16];
-  Elf64_Half    e_type;
-  Elf64_Half    e_machine;
-  Elf64_Word    e_version;
-  Elf64_Addr    e_entry;
-  Elf64_Off     e_phoff;
-  Elf64_Off     e_shoff;
-  Elf64_Word    e_flags;
-  Elf64_Half    e_ehsize;
-  Elf64_Half    e_phentsize;
-  Elf64_Half    e_phnum;
-  Elf64_Half    e_shentsize;
-  Elf64_Half    e_shnum;
-  Elf64_Half    e_shstrndx;
-} Elf64_Ehdr;
-
-typedef struct {
-  Elf64_Word  p_type;
-  Elf64_Word  p_flags;
-  Elf64_Off   p_offset;
-  Elf64_Addr  p_vaddr;
-  Elf64_Addr  p_paddr;
-  Elf64_Xword p_filesz;
-  Elf64_Xword p_memsz;
-  Elf64_Xword p_align;
-} Elf64_Phdr;
 
 struct MemoryMap {
   UINTN buffer_size;
@@ -185,6 +152,30 @@ EFI_STATUS OpenGOP(EFI_HANDLE image_handle,
   return EFI_SUCCESS;
 }
 
+void CalcLoadAddresRange(Elf64_Ehdr* ehdr, UINT64* first, UINT64* last) {
+  Elf64_Phdr* phdr = (Elf64_Phdr*)((UINT64)ehdr + ehdr->e_phoff);
+  *first = MAX_UINT64;
+  *last = 0;
+  for (Elf64_Half i = 0; i < ehdr->e_phnum; ++i) {
+    if (phdr[i].p_type != PT_LOAD) continue;
+    *first = MIN(*first, phdr[i].p_vaddr);
+    *last = MAX(*last, phdr[i].p_vaddr + phdr[i].p_memsz);
+  }
+}
+
+void CopyLoadSegments(Elf64_Ehdr* ehdr) {
+  Elf64_Phdr* phdr = (Elf64_Phdr*)((UINT64)ehdr + ehdr->e_phoff);
+  for (Elf64_Half i = 0; i < ehdr->e_phnum; ++i) {
+    if (phdr[i].p_type != PT_LOAD) continue;
+    
+    UINT64 segm_in_file = (UINT64)ehdr + phdr[i].p_offset;
+    CopyMem((VOID*)phdr[i].p_vaddr, (VOID*)segm_in_file, phdr[i].p_filesz);
+    
+    UINTN remain_bytes = phdr[i].p_memsz - phdr[i].p_filesz;
+    SetMem((VOID*)(phdr[i].p_vaddr + phdr[i].p_filesz), remain_bytes, 0);
+  }
+}
+
 EFI_STATUS EFIAPI UefiMain(
     EFI_HANDLE image_handle,
     EFI_SYSTEM_TABLE *system_table) {
@@ -223,50 +214,50 @@ EFI_STATUS EFIAPI UefiMain(
   EFI_FILE_INFO* file_info = (EFI_FILE_INFO*)file_info_buffer;
   UINTN kernel_file_size = file_info->FileSize;
 
-  // ELFファイルを一時領域(0x100000)にまるごとロード
-  EFI_PHYSICAL_ADDRESS kernel_base_addr = 0x100000;
-  gBS->AllocatePages(
-    AllocateAddress, EfiLoaderData,
-    (kernel_file_size + 0xfff) / 0x1000, &kernel_base_addr);
-  status = kernel_file->Read(kernel_file, &kernel_file_size, (VOID*)kernel_base_addr);
-  Print(L"Kernel: 0x%0lx (%lu bytes): %r\n", kernel_base_addr, kernel_file_size, status);
-
-  // ELFプログラムヘッダを解析してPT_LOADセグメントをVMAに配置
-  Elf64_Ehdr *ehdr = (Elf64_Ehdr*)kernel_base_addr;
-  UINT64 kernel_first_addr = MAX_UINT64, kernel_last_addr = 0;
-  for (UINTN i = 0; i < ehdr->e_phnum; i++) {
-    Elf64_Phdr *phdr = (Elf64_Phdr*)(kernel_base_addr + ehdr->e_phoff + ehdr->e_phentsize * i);
-    if (phdr->p_type != PT_LOAD) continue;
-    if (phdr->p_vaddr < kernel_first_addr) kernel_first_addr = phdr->p_vaddr;
-    if (phdr->p_vaddr + phdr->p_memsz > kernel_last_addr) kernel_last_addr = phdr->p_vaddr + phdr->p_memsz;
+  // カーネルを一時ロード
+  VOID* kernel_buffer;
+  status = gBS->AllocatePool(EfiLoaderData, kernel_file_size, &kernel_buffer);
+  if (EFI_ERROR(status)) {
+    Print(L"failed to allocate pool: %r\n", status);
+    Halt();
   }
-  EFI_PHYSICAL_ADDRESS kernel_load_addr = kernel_first_addr;
-  gBS->AllocatePages(
-    AllocateAddress, EfiLoaderData,
-    (kernel_last_addr - kernel_first_addr + 0xfff) / 0x1000, &kernel_load_addr);
-  for (UINTN i = 0; i < ehdr->e_phnum; i++) {
-    Elf64_Phdr *phdr = (Elf64_Phdr*)(kernel_base_addr + ehdr->e_phoff + ehdr->e_phentsize * i);
-    if (phdr->p_type != PT_LOAD) continue;
-    CopyMem((VOID*)phdr->p_vaddr, (VOID*)(kernel_base_addr + phdr->p_offset), phdr->p_filesz);
-    SetMem((VOID*)(phdr->p_vaddr + phdr->p_filesz), phdr->p_memsz - phdr->p_filesz, 0);
+  status = kernel_file->Read(kernel_file, &kernel_file_size, kernel_buffer);
+  if (EFI_ERROR(status)) {
+    Print(L"error: %r\n", status);
+    Halt();
+  }
+  
+  // カーネルのファイルヘッダ読み込み
+  Elf64_Ehdr* kernel_ehdr = (Elf64_Ehdr*)kernel_buffer;
+  UINT64 kernel_first_addr, kernel_last_addr;
+  CalcLoadAddresRange(kernel_ehdr, &kernel_first_addr, &kernel_last_addr);
+  
+  // 本ロード領域をページで確保
+  UINTN num_pages = (kernel_last_addr - kernel_first_addr + 0xfff) / 0x1000;
+  status = gBS->AllocatePages(AllocateAddress, EfiLoaderData,
+                            num_pages, &kernel_first_addr);
+  if (EFI_ERROR(status)) {
+    Print(L"failed to allocate pages: %r\n", status);
+    Halt();
+  }
+  
+  // 本ロード領域にLOADセグメントをコピー
+  CopyLoadSegments(kernel_ehdr);
+  Print(L"Kernel: 0x%0lx - 0x%0lx\n", kernel_first_addr, kernel_last_addr);
+  
+  // エントリーポイントを記録しておく
+  UINT64 entry_addr = kernel_ehdr->e_entry;
+
+  // 一時ロードしたカーネルを削除
+  status = gBS->FreePool(kernel_buffer);
+  if (EFI_ERROR(status)) {
+    Print(L"failed to free pool: %r\n", status);
+    Halt();
   }
 
+  // Graphic情報を取得して、configに保持する
   EFI_GRAPHICS_OUTPUT_PROTOCOL* gop;
   OpenGOP(image_handle, &gop);
-
-  status = gBS->ExitBootServices(image_handle, memmap.map_key);
-  if (EFI_ERROR(status)) {
-    status = GetMemoryMap(&memmap);
-    if (EFI_ERROR(status)) {
-      Print(L"failed to get memory map: %r\n", status);
-      while (1);
-    }
-    status = gBS->ExitBootServices(image_handle, memmap.map_key);
-    if (EFI_ERROR(status)) {
-      Print(L"Could not exit boot service: %r\n", status);
-      while (1);
-    }
-  }
 
   struct FrameBufferConfig config = {
       (UINT8*)gop->Mode->FrameBufferBase,
@@ -288,7 +279,22 @@ EFI_STATUS EFIAPI UefiMain(
           Halt();
   }
 
-  UINT64 entry_addr = ehdr->e_entry;
+  // BootServiceを終了させる
+  status = gBS->ExitBootServices(image_handle, memmap.map_key);
+  if (EFI_ERROR(status)) {
+    status = GetMemoryMap(&memmap);
+    if (EFI_ERROR(status)) {
+      Print(L"failed to get memory map: %r\n", status);
+      while (1);
+    }
+    status = gBS->ExitBootServices(image_handle, memmap.map_key);
+    if (EFI_ERROR(status)) {
+      Print(L"Could not exit boot service: %r\n", status);
+      while (1);
+    }
+  }
+
+  // カーネルの呼び出し
   typedef void EntryPointType(const struct FrameBufferConfig*);
   EntryPointType* entry_point = (EntryPointType*)entry_addr;
   entry_point(&config);
