@@ -1,6 +1,7 @@
 #include <cstddef>
 #include <cstdio>
 
+#include "console.hpp"
 #include "font.hpp"
 #include "graphics.hpp"
 
@@ -36,8 +37,9 @@ extern "C" void KernelMain(const FrameBufferConfig &frame_buffer_config) {
 
   // WriteAscii(*pixel_writer, 50, 50, 'A', {0,0,0});
   // WriteAscii(*pixel_writer, 58, 50, 'Z', {0,0,0});
-  WriteString(*pixel_writer, 58, 50 - 18 * 2, "Hello! World!", {0, 0, 0});
+  // WriteString(*pixel_writer, 58, 50 - 18 * 2, "Hello! World!", {0, 0, 0});
 
+  /*
   char buf[128];
   sprintf(buf, "1 + 2 = %d", 1 + 2);
   WriteString(*pixel_writer, 58, 50 - 18, buf, {0, 0, 0});
@@ -48,6 +50,15 @@ extern "C" void KernelMain(const FrameBufferConfig &frame_buffer_config) {
     int y_off = i / 32;
     WriteAscii(*pixel_writer, 50 + (x_off * 8), 50 + (y_off * 16), c,
                {0, 0, 0});
+  }
+  */
+
+  Console console{*pixel_writer, {0, 0, 0}, {255, 255, 255}};
+
+  char buf[128];
+  for (int i = 0; i < 27; ++i) {
+    sprintf(buf, "line %d\n", i);
+    console.PutString(buf);
   }
 
   while (1)
