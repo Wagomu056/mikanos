@@ -9,6 +9,9 @@ void *operator new(size_t size, void *buf) { return buf; }
 
 void operator delete(void *obj) noexcept {}
 
+const PixelColor kDesktopBGColor{45, 118, 237};
+const PixelColor kDesktopFGColor{255, 255, 255};
+
 const int kMouseCursorWidth = 15;
 const int kMouseCursorHeight = 24;
 const char mouse_cursor_shape[kMouseCursorHeight][kMouseCursorWidth + 1] = {
@@ -68,8 +71,11 @@ extern "C" void KernelMain(const FrameBufferConfig &frame_buffer_config) {
     break;
   }
 
-  for (int x = 0; x < frame_buffer_config.horizontal_resolution; ++x) {
-    for (int y = 0; y < frame_buffer_config.vertical_resolution; ++y) {
+  const int kFrameWidth = frame_buffer_config.horizontal_resolution;
+  const int kFrameHeight = frame_buffer_config.vertical_resolution;
+
+  for (int x = 0; x < kFrameWidth; ++x) {
+    for (int y = 0; y < kFrameHeight; ++y) {
       pixel_writer->Write(x, y, {255, 255, 255});
     }
   }
@@ -80,13 +86,23 @@ extern "C" void KernelMain(const FrameBufferConfig &frame_buffer_config) {
     }
   }
 
-  console =
-      new (console_buf) Console{*pixel_writer, {0, 0, 0}, {255, 255, 255}};
+  // draw windows
+  FillRectangle(*pixel_writer, {0, 0}, {kFrameWidth, kFrameHeight - 50},
+                kDesktopBGColor);
+  FillRectangle(*pixel_writer, {0, kFrameHeight - 50}, {kFrameWidth, 50},
+                {1, 8, 17});
+  FillRectangle(*pixel_writer, {0, kFrameHeight - 50}, {kFrameWidth / 5, 50},
+                {80, 80, 80});
 
-  for (int i = 0; i < 27; ++i) {
-    printk("printk: %d\n", i);
-  }
+  DrawRectangle(*pixel_writer, {10, kFrameHeight - 40}, {30, 30},
+                {160, 160, 160});
 
+  // create console
+  console = new (console_buf)
+      Console{*pixel_writer, kDesktopFGColor, kDesktopBGColor};
+  printk("Welcome to MikanOS!\n");
+
+  // draw cursor
   for (int dy = 0; dy < kMouseCursorHeight; ++dy) {
     for (int dx = 0; dx < kMouseCursorWidth; ++dx) {
       if (mouse_cursor_shape[dy][dx] == '@') {
