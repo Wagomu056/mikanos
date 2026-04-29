@@ -36,6 +36,8 @@ inline uint16_t ReadVendorId(const Device &dev) {
 
 ClassCode ReadClassCode(uint8_t bus, uint8_t device, uint8_t function);
 
+WithError<uint64_t> ReadBar(Device &device, unsigned int bar_index);
+
 /** @brief ScanAllBus() により発見された PCI デバイスの一覧 */
 inline std::array<Device, 32> devices;
 
@@ -48,4 +50,8 @@ inline int num_device;
  * 発見したデバイスの数を num_devices に設定する．
  */
 Error ScanAllBus();
+
+constexpr uint8_t CalcBarAddress(unsigned int bar_index) {
+  return 0x10 + 4 * bar_index;
+}
 } // namespace pci
