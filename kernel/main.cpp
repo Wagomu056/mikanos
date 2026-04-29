@@ -8,7 +8,10 @@
 #include "logger.hpp"
 #include "pci.hpp"
 
+#include "usb/xhci/xhci.hpp"
+
 void operator delete(void *obj) noexcept {}
+void operator delete(void *obj, std::align_val_t align) noexcept {}
 
 const PixelColor kDesktopBGColor{45, 118, 237};
 const PixelColor kDesktopFGColor{255, 255, 255};
@@ -151,6 +154,12 @@ extern "C" void KernelMain(const FrameBufferConfig &frame_buffer_config) {
   const uint64_t xhc_mmio_base = xhc_bar.value & ~static_cast<uint64_t>(0xf);
   Log(kDebug, "xHC mmio_base %lx\n", xhc_mmio_base);
 
+  usb::xhci::Controller xhc{xhc_mmio_base};
+  while (1)
+    __asm__("hlt");
+}
+
+extern "C" void __cxa_pure_virtual() {
   while (1)
     __asm__("hlt");
 }
