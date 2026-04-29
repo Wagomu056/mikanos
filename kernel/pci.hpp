@@ -9,6 +9,9 @@ const uint16_t kConfigAddress = 0x0cf8;
 /** @brief CONFIG_DATA レジスタのIOポートアドレス */
 const uint16_t kConfigData = 0x0cfc;
 
+uint16_t ReadVendorId(uint8_t bus, uint8_t device, uint8_t function);
+uint32_t ReadClassCode(uint8_t bus, uint8_t device, uint8_t function);
+
 /** @brief PCI デバイスを操作するための基礎データを格納する
  *
  * バス番号，デバイス番号，ファンクション番号はデバイスを特定するのに必須．
@@ -20,6 +23,9 @@ struct Device {
 
 /** @brief ScanAllBus() により発見された PCI デバイスの一覧 */
 inline std::array<Device, 32> devices;
+
+/** @brief devices の有効な要素の数 */
+inline int num_device;
 
 /** @brief PCI デバイスをすべて探索し devices に格納する
  *
