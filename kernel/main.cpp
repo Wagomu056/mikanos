@@ -147,14 +147,22 @@ extern "C" void KernelMain(const FrameBufferConfig &frame_buffer_config) {
   if (xhc_dev) {
     Log(kInfo, "xHC has been found: %d.%d.%d\n", xhc_dev->bus, xhc_dev->device,
         xhc_dev->function);
+
+    const WithError<uint64_t> xhc_bar = pci::ReadBar(*xhc_dev, 0);
+    Log(kDebug, "ReadBar: %s\n", xhc_bar.error.Name());
+    const uint64_t xhc_mmio_base = xhc_bar.value & ~static_cast<uint64_t>(0xf);
+    Log(kDebug, "xHC mmio_base %lx\n", xhc_mmio_base);
+
+    usb::xhci::Controller xhc{xhc_mmio_base};
+    {
+      auto err = xhc.Initialize();
+      Log(kDebug, "xhc.Initialize: %s\n", err.Name());
+    }
+
+    Log(kInfo, "xHC starting\n");
+    xhc.Run();
   }
 
-  const WithError<uint64_t> xhc_bar = pci::ReadBar(*xhc_dev, 0);
-  Log(kDebug, "ReadBar: %s\n", xhc_bar.error.Name());
-  const uint64_t xhc_mmio_base = xhc_bar.value & ~static_cast<uint64_t>(0xf);
-  Log(kDebug, "xHC mmio_base %lx\n", xhc_mmio_base);
-
-  usb::xhci::Controller xhc{xhc_mmio_base};
   while (1)
     __asm__("hlt");
 }
