@@ -18,12 +18,12 @@ uint32_t MakeAddress(uint8_t bus, uint8_t device, uint8_t function,
 
 Error AddDevice(const Device &device) {
   if (num_device == devices.size()) {
-    return Error::kFull;
+    return MAKE_ERROR(Error::kFull);
   }
 
   devices[num_device] = device;
   ++num_device;
-  return Error::kSuccess;
+  return MAKE_ERROR(Error::kSuccess);
 }
 
 } // namespace
@@ -80,7 +80,7 @@ Error ScanFunction(uint8_t bus, uint8_t device, uint8_t function) {
     return ScanBus(secondary_bus);
   }
 
-  return Error::kSuccess;
+  return MAKE_ERROR(Error::kSuccess);
 }
 
 Error ScanDevice(uint8_t bus, uint8_t device) {
@@ -88,7 +88,7 @@ Error ScanDevice(uint8_t bus, uint8_t device) {
     return err;
   }
   if (IsSingleFunctionDevice(ReadHeaderType(bus, device, 0))) {
-    return Error::kSuccess;
+    return MAKE_ERROR(Error::kSuccess);
   }
 
   for (uint8_t function = 1; function < 8; ++function) {
@@ -99,7 +99,7 @@ Error ScanDevice(uint8_t bus, uint8_t device) {
       return err;
     }
   }
-  return Error::kSuccess;
+  return MAKE_ERROR(Error::kSuccess);
 }
 
 Error ScanBus(uint8_t bus) {
@@ -111,7 +111,7 @@ Error ScanBus(uint8_t bus) {
       return err;
     }
   }
-  return Error::kSuccess;
+  return MAKE_ERROR(Error::kSuccess);
 }
 
 Error ScanAllBus() {
@@ -131,6 +131,6 @@ Error ScanAllBus() {
     }
   }
 
-  return Error::kSuccess;
+  return MAKE_ERROR(Error::kSuccess);
 }
 } // namespace pci
