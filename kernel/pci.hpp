@@ -9,8 +9,15 @@ const uint16_t kConfigAddress = 0x0cf8;
 /** @brief CONFIG_DATA レジスタのIOポートアドレス */
 const uint16_t kConfigData = 0x0cfc;
 
-uint16_t ReadVendorId(uint8_t bus, uint8_t device, uint8_t function);
-uint32_t ReadClassCode(uint8_t bus, uint8_t device, uint8_t function);
+struct ClassCode {
+  uint8_t base, sub, interface;
+
+  bool Match(uint8_t b) { return b == base; }
+  bool Match(uint8_t b, uint8_t s) { return Match(b) && s == sub; }
+  bool Match(uint8_t b, uint8_t s, uint8_t i) {
+    return Match(b, s) && i == interface;
+  }
+};
 
 /** @brief PCI デバイスを操作するための基礎データを格納する
  *
@@ -19,7 +26,15 @@ uint32_t ReadClassCode(uint8_t bus, uint8_t device, uint8_t function);
  * */
 struct Device {
   uint8_t bus, device, function, header_type;
+  ClassCode class_code;
 };
+
+uint16_t ReadVendorId(uint8_t bus, uint8_t device, uint8_t function);
+inline uint16_t ReadVendorId(const Device &dev) {
+  return ReadVendorId(dev.bus, dev.device, dev.function);
+}
+
+ClassCode ReadClassCode(uint8_t bus, uint8_t device, uint8_t function);
 
 /** @brief ScanAllBus() により発見された PCI デバイスの一覧 */
 inline std::array<Device, 32> devices;
