@@ -6,6 +6,7 @@
 #include "error.hpp"
 #include "graphics.hpp"
 #include "logger.hpp"
+#include "mouse.hpp"
 #include "pci.hpp"
 
 #include "usb/classdriver/mouse.hpp"
@@ -17,37 +18,15 @@ void operator delete(void *obj, std::align_val_t align) noexcept {}
 const PixelColor kDesktopBGColor{45, 118, 237};
 const PixelColor kDesktopFGColor{255, 255, 255};
 
-const int kMouseCursorWidth = 15;
-const int kMouseCursorHeight = 24;
-const char mouse_cursor_shape[kMouseCursorHeight][kMouseCursorWidth + 1] = {
-    "@              ", //
-    "@@             ", //
-    "@.@            ", //
-    "@..@           ", //
-    "@...@          ", //
-    "@....@         ", //
-    "@.....@        ", //
-    "@......@       ", //
-    "@.......@      ", //
-    "@........@     ", //
-    "@.........@    ", //
-    "@..........@   ", //
-    "@...........@  ", //
-    "@............@ ", //
-    "@......@@@@@@@@", //
-    "@......@       ", //
-    "@....@@.@      ", //
-    "@...@ @.@      ", //
-    "@..@   @.@     ", //
-    "@.@    @.@     ", //
-    "@@      @.@    ", //
-    "@       @.@    ", //
-    "         @.@   ", //
-    "         @@@   ", //
-};
-
 char console_buf[sizeof(Console)];
 Console *console;
+
+char mouse_cursor_buf[sizeof(MouseCursor)];
+MouseCursor *mouse_cursor;
+
+void MouseObserver(int8_t displacement_x, int8_t displacement_y) {
+  mouse_cursor->MoveRelative({displacement_x, displacement_y});
+}
 
 int printk(const char *format, ...) {
   va_list ap;
@@ -107,19 +86,8 @@ extern "C" void KernelMain(const FrameBufferConfig &frame_buffer_config) {
       Console{*pixel_writer, kDesktopFGColor, kDesktopBGColor};
   printk("Welcome to MikanOS!\n");
 
-  // draw cursor
-  for (int dy = 0; dy < kMouseCursorHeight; ++dy) {
-    for (int dx = 0; dx < kMouseCursorWidth; ++dx) {
-      if (mouse_cursor_shape[dy][dx] == '@') {
-        pixel_writer->Write(200 + dx, 100 + dy, {0, 0, 0});
-      } else if (mouse_cursor_shape[dy][dx] == '.') {
-        pixel_writer->Write(200 + dx, 100 + dy, {255, 255, 255});
-      }
-    }
-  }
-
   // LogLevel
-  SetLogLevel(kDebug);
+  SetLogLevel(kInfo);
 
   // print all bus
   auto err = pci::ScanAllBus();
@@ -164,7 +132,10 @@ extern "C" void KernelMain(const FrameBufferConfig &frame_buffer_config) {
   Log(kInfo, "xHC starting\n");
   xhc.Run();
 
-  // usb::HIDMouseDriver::default = MouseObserver;
+  mouse_cursor = new (mouse_cursor_buf)
+      MouseCursor{pixel_writer, kDesktopBGColor, {600, 200}};
+
+  usb::HIDMouseDriver::default_observer = MouseObserver;
 
   for (int i = 1; i <= xhc.MaxPorts(); ++i) {
     auto port = xhc.PortAt(i);
