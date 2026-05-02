@@ -112,7 +112,7 @@ extern "C" void KernelMain(const FrameBufferConfig &frame_buffer_config) {
   SetLogLevel(kInfo);
 
   mouse_cursor = new (mouse_cursor_buf)
-      MouseCursor{pixel_writer, kDesktopBGColor, {600, 200}};
+      MouseCursor{pixel_writer, kDesktopBGColor, {300, 200}};
 
   // print all bus
   auto err = pci::ScanAllBus();
