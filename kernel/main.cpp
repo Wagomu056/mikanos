@@ -25,6 +25,7 @@ char mouse_cursor_buf[sizeof(MouseCursor)];
 MouseCursor *mouse_cursor;
 
 void MouseObserver(int8_t displacement_x, int8_t displacement_y) {
+  Log(kInfo, "catch %d, %d\n", displacement_x, displacement_y);
   mouse_cursor->MoveRelative({displacement_x, displacement_y});
 }
 
@@ -110,6 +111,9 @@ extern "C" void KernelMain(const FrameBufferConfig &frame_buffer_config) {
   // LogLevel
   SetLogLevel(kInfo);
 
+  mouse_cursor = new (mouse_cursor_buf)
+      MouseCursor{pixel_writer, kDesktopBGColor, {600, 200}};
+
   // print all bus
   auto err = pci::ScanAllBus();
   printk("ScanAllBus: %s\n", err.Name());
@@ -140,31 +144,28 @@ extern "C" void KernelMain(const FrameBufferConfig &frame_buffer_config) {
   }
 
   const WithError<uint64_t> xhc_bar = pci::ReadBar(*xhc_dev, 0);
-  Log(kDebug, "ReadBar: %s\n", xhc_bar.error.Name());
+  Log(kInfo, "ReadBar: %s\n", xhc_bar.error.Name());
   const uint64_t xhc_mmio_base = xhc_bar.value & ~static_cast<uint64_t>(0xf);
-  Log(kDebug, "xHC mmio_base %lx\n", xhc_mmio_base);
+  Log(kInfo, "xHC mmio_base %lx\n", xhc_mmio_base);
 
   usb::xhci::Controller xhc{xhc_mmio_base};
   if (0x8086 == pci::ReadVendorId(*xhc_dev)) {
-    SwitchEhci2Xhci(*xhc_dev);
+    // SwitchEhci2Xhci(*xhc_dev);
   }
 
   {
     auto err = xhc.Initialize();
-    Log(kDebug, "xhc.Initialize: %s\n", err.Name());
+    Log(kInfo, "xhc.Initialize: %s\n", err.Name());
   }
 
   Log(kInfo, "xHC starting\n");
   xhc.Run();
 
-  mouse_cursor = new (mouse_cursor_buf)
-      MouseCursor{pixel_writer, kDesktopBGColor, {600, 200}};
-
   usb::HIDMouseDriver::default_observer = MouseObserver;
 
   for (int i = 1; i <= xhc.MaxPorts(); ++i) {
     auto port = xhc.PortAt(i);
-    Log(kDebug, "Port %d: IsConnected=%d\n", i, port.IsConnected());
+    Log(kInfo, "Port %d: IsConnected=%d\n", i, port.IsConnected());
 
     if (port.IsConnected()) {
       if (auto err = ConfigurePort(xhc, port)) {
@@ -180,6 +181,7 @@ extern "C" void KernelMain(const FrameBufferConfig &frame_buffer_config) {
       Log(kError, "Error while ProcessEvent: %s at %s:%d\n", err.Name(),
           err.File(), err.Line());
     }
+    // Log(kInfo, "ProcessEvent post\n");
   }
 
   while (1)
