@@ -8,7 +8,7 @@ OBJS = main.o graphics.o font.o hankaku.o newlib_support.o console.o pci.o asmfu
 CPPFLAGS += -I.
 CFLAGS += -O2 -Wall -g --target=x86_64-elf -ffreestanding -mno-red-zone
 CXXFLAGS += -O2 -Wall -g --target=x86_64-elf -ffreestanding -mno-red-zone -fno-exceptions -fno-rtti -std=c++17
-LDFLAGS += --entry KernelMain -z norelro --image-base 0x200000 --static
+LDFLAGS += --entry KernelMain -z norelro --image-base 0x100000 --static
 
 .PHONY: all
 all: $(TARGET)
