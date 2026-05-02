@@ -150,7 +150,7 @@ extern "C" void KernelMain(const FrameBufferConfig &frame_buffer_config) {
 
   usb::xhci::Controller xhc{xhc_mmio_base};
   if (0x8086 == pci::ReadVendorId(*xhc_dev)) {
-    // SwitchEhci2Xhci(*xhc_dev);
+    SwitchEhci2Xhci(*xhc_dev);
   }
 
   {
