@@ -38,6 +38,9 @@ ClassCode ReadClassCode(uint8_t bus, uint8_t device, uint8_t function);
 
 WithError<uint64_t> ReadBar(Device &device, unsigned int bar_index);
 
+uint32_t ReadConfReg(const Device &dev, uint8_t reg_addr);
+void WriteConfReg(const Device &dev, uint8_t reg_addr, uint32_t value);
+
 /** @brief ScanAllBus() により発見された PCI デバイスの一覧 */
 inline std::array<Device, 32> devices;
 
