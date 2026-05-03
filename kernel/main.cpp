@@ -5,6 +5,7 @@
 #include "console.hpp"
 #include "error.hpp"
 #include "graphics.hpp"
+#include "interrupt.hpp"
 #include "logger.hpp"
 #include "mouse.hpp"
 #include "pci.hpp"
@@ -27,6 +28,18 @@ MouseCursor *mouse_cursor;
 void MouseObserver(int8_t displacement_x, int8_t displacement_y) {
   Log(kInfo, "catch %d, %d\n", displacement_x, displacement_y);
   mouse_cursor->MoveRelative({displacement_x, displacement_y});
+}
+
+usb::xhci::Controller *xhc;
+
+__attribute__((interrupt)) void IntHandlerXHCI(InterruptFrame *frame) {
+  while (xhc->PrimaryEventRing()->HasFront()) {
+    if (auto err = ProcessEvent(*xhc)) {
+      Log(kError, "Error while ProcessEvent: %s at %s:%d\n", err.Name(),
+          err.File(), err.Line());
+    }
+  }
+  NotifyEndOfInterrupt();
 }
 
 void SwitchEhci2Xhci(const pci::Device &xhc_dev) {
@@ -161,6 +174,9 @@ extern "C" void KernelMain(const FrameBufferConfig &frame_buffer_config) {
   Log(kInfo, "xHC starting\n");
   xhc.Run();
 
+  ::xhc = &xhc;
+  __asm__("sti");
+
   usb::HIDMouseDriver::default_observer = MouseObserver;
 
   for (int i = 1; i <= xhc.MaxPorts(); ++i) {
@@ -176,12 +192,12 @@ extern "C" void KernelMain(const FrameBufferConfig &frame_buffer_config) {
     }
   }
 
+  // @TODO dlete this later
   while (1) {
     if (auto err = ProcessEvent(xhc)) {
       Log(kError, "Error while ProcessEvent: %s at %s:%d\n", err.Name(),
           err.File(), err.Line());
     }
-    // Log(kInfo, "ProcessEvent post\n");
   }
 
   while (1)
