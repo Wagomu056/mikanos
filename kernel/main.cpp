@@ -27,7 +27,7 @@ char mouse_cursor_buf[sizeof(MouseCursor)];
 MouseCursor *mouse_cursor;
 
 void MouseObserver(int8_t displacement_x, int8_t displacement_y) {
-  Log(kInfo, "catch %d, %d\n", displacement_x, displacement_y);
+  Log(kDebug, "catch %d, %d\n", displacement_x, displacement_y);
   mouse_cursor->MoveRelative({displacement_x, displacement_y});
 }
 
