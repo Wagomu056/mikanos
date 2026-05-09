@@ -8,6 +8,7 @@
 #include "graphics.hpp"
 #include "interrupt.hpp"
 #include "logger.hpp"
+#include "memory_map.hpp"
 #include "mouse.hpp"
 #include "pci.hpp"
 #include "queue.hpp"
@@ -84,7 +85,8 @@ int printk(const char *format, ...) {
 
 char pixel_writer_buf[sizeof(RGBResv8BitPerColorPixelWriter)];
 PixelWriter *pixel_writer;
-extern "C" void KernelMain(const FrameBufferConfig &frame_buffer_config) {
+extern "C" void KernelMain(const FrameBufferConfig &frame_buffer_config,
+                           const MemoryMap &memory_map) {
   switch (frame_buffer_config.pixel_format) {
   case kPixelRGBResv8BitPerColor:
     pixel_writer = new (pixel_writer_buf)

@@ -281,9 +281,10 @@ EFI_STATUS EFIAPI UefiMain(EFI_HANDLE image_handle,
   }
 
   // カーネルの呼び出し
-  typedef void EntryPointType(const struct FrameBufferConfig*);
-  EntryPointType* entry_point = (EntryPointType*)entry_addr;
-  entry_point(&config);
+  typedef void EntryPointType(const struct FrameBufferConfig *,
+                              const struct MemoryMap *);
+  EntryPointType *entry_point = (EntryPointType *)entry_addr;
+  entry_point(&config, &memmap);
 
   Print(L"ALL DONE\n");
 
