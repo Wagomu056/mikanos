@@ -169,7 +169,7 @@ extern "C" void KernelMain(const FrameBufferConfig &frame_buffer_config,
     const auto &dev = pci::devices[i];
     auto vendor_id = pci::ReadVendorId(dev.bus, dev.device, dev.function);
     auto class_code = pci::ReadClassCode(dev.bus, dev.device, dev.function);
-    Log(kInfo, "%d.%d.%d: vend %04x, class %08x, head %02x\n", dev.bus,
+    Log(kDebug, "%d.%d.%d: vend %04x, class %08x, head %02x\n", dev.bus,
         dev.device, dev.function, vendor_id, class_code, dev.header_type);
   }
 
@@ -203,9 +203,9 @@ extern "C" void KernelMain(const FrameBufferConfig &frame_buffer_config,
       pci::MSIDeliveryMode::kFixed, InterruptVector::kXHCI, 0);
 
   const WithError<uint64_t> xhc_bar = pci::ReadBar(*xhc_dev, 0);
-  Log(kInfo, "ReadBar: %s\n", xhc_bar.error.Name());
+  Log(kDebug, "ReadBar: %s\n", xhc_bar.error.Name());
   const uint64_t xhc_mmio_base = xhc_bar.value & ~static_cast<uint64_t>(0xf);
-  Log(kInfo, "xHC mmio_base %lx\n", xhc_mmio_base);
+  Log(kDebug, "xHC mmio_base %lx\n", xhc_mmio_base);
 
   usb::xhci::Controller xhc{xhc_mmio_base};
   if (0x8086 == pci::ReadVendorId(*xhc_dev)) {
@@ -214,7 +214,7 @@ extern "C" void KernelMain(const FrameBufferConfig &frame_buffer_config,
 
   {
     auto err = xhc.Initialize();
-    Log(kInfo, "xhc.Initialize: %s\n", err.Name());
+    Log(kDebug, "xhc.Initialize: %s\n", err.Name());
   }
 
   Log(kInfo, "xHC starting\n");
@@ -227,7 +227,7 @@ extern "C" void KernelMain(const FrameBufferConfig &frame_buffer_config,
 
   for (int i = 1; i <= xhc.MaxPorts(); ++i) {
     auto port = xhc.PortAt(i);
-    Log(kInfo, "Port %d: IsConnected=%d\n", i, port.IsConnected());
+    Log(kDebug, "Port %d: IsConnected=%d\n", i, port.IsConnected());
 
     if (port.IsConnected()) {
       if (auto err = ConfigurePort(xhc, port)) {
