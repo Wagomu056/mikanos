@@ -5,6 +5,7 @@
 #include "asmfunc.h"
 #include "console.hpp"
 #include "error.hpp"
+#include "frame_buffer_config.hpp"
 #include "graphics.hpp"
 #include "interrupt.hpp"
 #include "logger.hpp"
@@ -28,6 +29,9 @@ Console *console;
 
 char mouse_cursor_buf[sizeof(MouseCursor)];
 MouseCursor *mouse_cursor;
+
+char pixel_writer_buf[sizeof(RGBResv8BitPerColorPixelWriter)];
+PixelWriter *pixel_writer;
 
 void MouseObserver(int8_t displacement_x, int8_t displacement_y) {
   Log(kDebug, "catch %d, %d\n", displacement_x, displacement_y);
@@ -83,10 +87,14 @@ int printk(const char *format, ...) {
   return result;
 }
 
-char pixel_writer_buf[sizeof(RGBResv8BitPerColorPixelWriter)];
-PixelWriter *pixel_writer;
-extern "C" void KernelMain(const FrameBufferConfig &frame_buffer_config,
-                           const MemoryMap &memory_map) {
+alignas(16) uint8_t kernel_main_stack[1024 * 1024];
+
+extern "C" void
+KernelMainNewStack(const FrameBufferConfig &frame_buffer_config_ref,
+                   const MemoryMap &memory_map_ref) {
+  const FrameBufferConfig frame_buffer_config{frame_buffer_config_ref};
+  const MemoryMap memory_map{memory_map_ref};
+
   switch (frame_buffer_config.pixel_format) {
   case kPixelRGBResv8BitPerColor:
     pixel_writer = new (pixel_writer_buf)
