@@ -13,6 +13,7 @@
 #include "mouse.hpp"
 #include "pci.hpp"
 #include "queue.hpp"
+#include "segment.h"
 
 #include "queue.hpp"
 #include "usb/classdriver/mouse.hpp"
@@ -139,6 +140,17 @@ KernelMainNewStack(const FrameBufferConfig &frame_buffer_config_ref,
 
   // LogLevel
   SetLogLevel(kInfo);
+
+  // SetupSegments
+  SetupSegments();
+
+  const uint16_t kernel_cs = 1 << 3;
+  const uint16_t kernel_ss = 2 << 3;
+  SetDSAll(0);
+  SetCSSS(kernel_cs, kernel_ss);
+
+  // @TODO
+  // SetupIdentityPageTable();
 
   printk("memory_map: %p\n", &memory_map);
   for (uintptr_t iter = reinterpret_cast<uintptr_t>(memory_map.buffer);

@@ -11,6 +11,10 @@ enum class DescriptorType {
   kCallGate = 12,
   kInterruptGate = 14,
   kTrapGate = 15,
+
+  // code & data segment types
+  kReadWrite = 2,
+  kExecuteRead = 10,
 };
 
 union InterruptDescriptorAttribute {
