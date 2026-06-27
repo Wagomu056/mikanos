@@ -11,6 +11,7 @@
 #include "logger.hpp"
 #include "memory_map.hpp"
 #include "mouse.hpp"
+#include "paging.hpp"
 #include "pci.hpp"
 #include "queue.hpp"
 #include "segment.h"
@@ -148,6 +149,8 @@ KernelMainNewStack(const FrameBufferConfig &frame_buffer_config_ref,
   const uint16_t kernel_ss = 2 << 3;
   SetDSAll(0);
   SetCSSS(kernel_cs, kernel_ss);
+
+  SetupIdentityPageTable();
 
   // @TODO
   // SetupIdentityPageTable();
