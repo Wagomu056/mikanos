@@ -9,6 +9,7 @@
 #include "graphics.hpp"
 #include "interrupt.hpp"
 #include "logger.hpp"
+#include "memory_manager.hpp"
 #include "memory_map.hpp"
 #include "mouse.hpp"
 #include "paging.hpp"
@@ -28,6 +29,9 @@ const PixelColor kDesktopFGColor{255, 255, 255};
 
 char console_buf[sizeof(Console)];
 Console *console;
+
+char memory_manager_buf[sizeof(BitmapMemoryManager)];
+BitmapMemoryManager *memory_manager;
 
 char mouse_cursor_buf[sizeof(MouseCursor)];
 MouseCursor *mouse_cursor;
@@ -152,8 +156,32 @@ KernelMainNewStack(const FrameBufferConfig &frame_buffer_config_ref,
 
   SetupIdentityPageTable();
 
-  // @TODO
-  // SetupIdentityPageTable();
+  memory_manager = new (memory_manager_buf) BitmapMemoryManager;
+
+  const auto memory_map_base = reinterpret_cast<uintptr_t>(memory_map.buffer);
+  uintptr_t available_end = 0;
+  for (uintptr_t iter = memory_map_base;
+       iter < memory_map_base + memory_map.map_size;
+       iter += memory_map.descriptor_size) {
+    auto desc = reinterpret_cast<const MemoryDescriptor *>(iter);
+    if (available_end < desc->physical_start) {
+      memory_manager->MarkAllocated(FrameID{available_end / kBytesPerFrame},
+                                    (desc->physical_start - available_end) /
+                                        kBytesPerFrame);
+    }
+
+    const auto physical_end =
+        desc->physical_start + desc->number_of_pages * kUEFIPageSize;
+    if (IsAvailable(static_cast<MemoryType>(desc->type))) {
+      available_end = physical_end;
+    } else {
+      memory_manager->MarkAllocated(
+          FrameID{desc->physical_start / kBytesPerFrame},
+          desc->number_of_pages * kUEFIPageSize / kBytesPerFrame);
+    }
+  }
+  memory_manager->SetMemoryRange(FrameID{1},
+                                 FrameID{available_end / kBytesPerFrame});
 
   printk("memory_map: %p\n", &memory_map);
   for (uintptr_t iter = reinterpret_cast<uintptr_t>(memory_map.buffer);
